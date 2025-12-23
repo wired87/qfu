@@ -1,50 +1,67 @@
-import numpy as np
-try:
-    import jax
-    import jax.numpy as jnp
-except ImportError:
-    class MockJax:
-        numpy = np
-    jax = MockJax()
-    jnp = np
+import os
 
-from core.qf_utils.all_subs import GLON_MAP, FERMIONS, G_FIELDS, H
+import numpy as np
+from data import ENV
+from qf_utils.all_subs import GLON_MAP, FERMIONS, G_FIELDS, H
 
 
 class FieldUtils:
 
     def __init__(self):
-        self.lambda_1 = jnp.array([
+        # set programmable field interaction
+        self.set_interaction()
+        self.shift_dirs = {
+            "x": (1, 0, 0),
+            "y": (0, 1, 0),
+            "z": (0, 0, 1),
+            "xy_pp": (1, 1, 0),
+            "xy_pm": (1, -1, 0),
+            "xz_pp": (1, 0, 1),
+            "xz_pm": (1, 0, -1),
+            "yz_pp": (0, 1, 1),
+            "yz_pm": (0, 1, -1),
+            "xyz_ppp": (1, 1, 1),
+            "xyz_ppm": (1, 1, -1),
+            "xyz_pmp": (1, -1, 1),
+            "xyz_pmm": (1, -1, -1)
+        }
+        
+        self.dim=int(os.getenv("DIM", 4))
+
+        self.env = self.create_env()
+
+        self.lambda_1 = np.array([
             [0, 1, 0],
-              [1, 0, 0],
-              [0, 0, 0]], dtype=complex)
-        self.lambda_2 = jnp.array([[0, -1j, 0],
+            [1, 0, 0],
+            [0, 0, 0]
+        ], dtype=complex)
+        self.lambda_2 = np.array([[0, -1j, 0],
                                   [1j, 0, 0],
                                   [0, 0, 0]], dtype=complex)
 
-        self.lambda_3 = jnp.array([[1, 0, 0],
+        self.lambda_3 = np.array([[1, 0, 0],
                                   [0, -1, 0],
                                   [0, 0, 0]], dtype=complex)
 
-        self.lambda_4 = jnp.array([[0, 0, 1],
+        self.lambda_4 = np.array([[0, 0, 1],
                                   [0, 0, 0],
                                   [1, 0, 0]], dtype=complex)
 
-        self.lambda_5 = jnp.array([[0, 0, -1j],
+        self.lambda_5 = np.array([[0, 0, -1j],
                                   [0, 0, 0],
                                   [1j, 0, 0]], dtype=complex)
 
-        self.lambda_6 = jnp.array([
+        self.lambda_6 = np.array([
             [0, 0, 0],
             [0, 0, 1],
             [0, 1, 0],
         ], dtype=complex)
 
-        self.lambda_7 = jnp.array([[0, 0, 0],
+        self.lambda_7 = np.array([[0, 0, 0],
                                   [0, 0, -1j],
                                   [0, 1j, 0]], dtype=complex)
 
-        self.lambda_8 = (1 / np.sqrt(3)) * jnp.array(
+        self.lambda_8 = (1 / np.sqrt(3)) * np.array(
         [[1, 0, 0],
              [0, 1, 0],
             [0, 0, -2]
@@ -61,17 +78,17 @@ class FieldUtils:
             self.lambda_8
         ]
 
-        self.T1 = 0.5 * jnp.array([
+        self.T1 = 0.5 * np.array([
             [0, 1],
             [1, 0]
         ], dtype=complex)
 
-        self.T2 = 0.5 * jnp.array([
+        self.T2 = 0.5 * np.array([
             [0, -1j],
             [1j, 0]
         ], dtype=complex)
 
-        self.T3 = 0.5 * jnp.array([
+        self.T3 = 0.5 * np.array([
             [1, 0],
             [0, -1]
         ], dtype=complex)
@@ -91,37 +108,36 @@ class FieldUtils:
         }
 
         ### GAMMA ###
-        self.gamma_0 = jnp.array([
+        self.gamma_0 = np.array([
             [1, 0, 0, 0],
             [0, 1, 0, 0],
             [0, 0, -1, 0],
             [0, 0, 0, -1]
         ], dtype=complex)
 
-        self.gamma_1 = jnp.array([
+        self.gamma_1 = np.array([
             [0, 0, 0, 1],
                             [0, 0, 1, 0],
                             [0, -1, 0, 0],
                             [-1, 0, 0, 0]], dtype=complex)
 
-        self.gamma_2 = jnp.array([
+        self.gamma_2 = np.array([
             [0, 0, 0, -1j],
                             [0, 0, 1j, 0],
                             [0, 1j, 0, 0],
                             [-1j, 0, 0, 0]], dtype=complex)
 
-        self.gamma_3 = jnp.array([[0, 0, 1, 0],
+        self.gamma_3 = np.array([[0, 0, 1, 0],
                             [0, 0, 0, -1],
                             [-1, 0, 0, 0],
                             [0, 1, 0, 0]], dtype=complex)
 
         self.gamma = [self.gamma_0, self.gamma_1, self.gamma_2, self.gamma_3]
-
         self.gamma0_inv = np.linalg.inv(self.gamma[0])  # (4,4) matrix
 
         self.mt = np.diag([1, -1, -1, -1]) #minkowski_tensor
-        self.triple_vertex_schema = jnp.zeros((4, 4, 4), dtype=complex)
-        self.quad_vertex_schema = jnp.zeros((4, 4, 4, 4), dtype=complex)
+        self.triple_vertex_schema = np.zeros((4, 4, 4), dtype=complex)
+        self.quad_vertex_schema = np.zeros((4, 4, 4, 4), dtype=complex)
 
         self.ckm = {
             "up": {"down": 0.974, "strange": 0.225, "bottom": 0.004},
@@ -129,22 +145,6 @@ class FieldUtils:
             "top": {"down": 0.009, "strange": 0.040, "bottom": 0.999},
         }
 
-
-        self.direction_definitions = {
-            "x": (1, 0, 0),
-            "y": (0, 1, 0),
-            "z": (0, 0, 1),
-            "xy_pp": (1, 1, 0),
-            "xy_pm": (1, -1, 0),
-            "xz_pp": (1, 0, 1),
-            "xz_pm": (1, 0, -1),
-            "yz_pp": (0, 1, 1),
-            "yz_pm": (0, 1, -1),
-            "xyz_ppp": (1, 1, 1),
-            "xyz_ppm": (1, 1, -1),
-            "xyz_pmp": (1, -1, 1),
-            "xyz_pmm": (1, -1, -1)
-        }
 
 
         self.fermion_fields = [
@@ -268,6 +268,46 @@ class FieldUtils:
             'mass': [0.000511, 0.10566, 1.777, 0.00255, 0.0048, 1.27, 0.095, 4.7, 172, 0.05, 0.05, 0.05]
         }
 
+    def create_env(self, world_cfg=None):
+        """
+        Create an ENVC layer (Environment Control Layer)
+        which manages global fields/states like temperature, etc.
+        """
+        # todo customize settings -> read from received yaml -> incl tiemsteps
+        # todo dev: apply envid
+        env = dict(
+            type="ENV",
+            pm_axes=self.get_dirs(),
+            parent=["USERS"],
+            i=1j,
+            world_cfg=world_cfg,
+            **ENV,
+        )
+
+        return env
+
+    def get_dirs(self):
+        plus = list(self.shift_dirs.values())
+
+        minus = []
+
+        for dir_str, struct in self.shift_dirs.items():
+
+            n_struct = []
+
+            for dir in struct:
+                is_negative = dir < 0
+
+                if is_negative:
+                    n_struct.append(abs(dir))
+                else:
+                    n_struct.append(int(dir * -1))
+
+            minus.append(tuple(n_struct))
+        axes = [plus, minus]
+        return axes
+
+
     def parent_ntype(self, ntype):
         parent = None
         ntype = ntype.lower()
@@ -313,11 +353,6 @@ class FieldUtils:
         return []
 
 
-    def sum_dmu(self, dmu):
-        dmu = jax.numpy.array(
-            jax.numpy.sum(dmu)
-        )
-        return dmu
 
 
     def _field_value(self, type):
@@ -371,7 +406,7 @@ class FieldUtils:
         """
         # Wenn es ein Dict ist, deserialisieren
         if isinstance(com, dict) and "bytes" in com:
-            com = jnp.array(com, complex)
+            com = np.array(com, complex)
 
         # Wenn es schon ein NumPy-Array ist, direkt zurückgeben
         if isinstance(com, np.ndarray):
@@ -383,7 +418,7 @@ class FieldUtils:
             complex_row = [complex(re, im) for re, im in row_data]
             complex_rows.append(complex_row)
 
-        psi = jnp.array(complex_rows, dtype=complex)
+        psi = np.array(complex_rows, dtype=complex)
         return psi
 
     def get_sym_group(self, ntype):
@@ -473,10 +508,10 @@ class FieldUtils:
 
     def restore_selfdict(self, data):
         new_dict = {}
-        #print("restore_selfdict data B4:", data)
+        #print("restore_selfdict admin_data B4:", admin_data)
         if isinstance(data, dict):
             for k, v in data.items():
-                if isinstance(v, dict) and "serialized_complex" in v:  # ("bytes" in v or "data" in v)
+                if isinstance(v, dict) and "serialized_complex" in v:  # ("bytes" in v or "admin_data" in v)
                     v = None
                 #v = convert_numeric(v)
                 new_dict[k] = v
@@ -490,52 +525,51 @@ class FieldUtils:
         g_V = float(isospin) - 2 * float(charge) * sin2W
         return g_V
 
-    def dmu(self, amount_nodes, dim, pos=None):
+    def dmu(self, dim:int, shape=True):
+        if shape:
+            return (
+                len(list(self.shift_dirs.values())),
+                dim,
+            )
         return [
-            self.field_value(pos or (0,0,0))
-            for a in range(dim)
-            for b in range(amount_nodes)
+            self.field_value(dim=dim)
+            for _ in range(len(list(self.shift_dirs.values())))
         ]
 
-    def fmunu(self):
-        #4x4
+    def fmunu(self, dim, shape=True):
+
         """
-        field_value = jnp.array([
+        field_value = np.array([
             [1.0 + 0.0j],  # Zeitkomponente A_0
             [0.0 + 0.0j],  # A_1
             [0.0 + 0.0j],  # A_2
             [0.0 + 0.0j]  # A_3
         ], dtype=complex)
         """
-        return tuple(jnp.array([[0j] * 4 for _ in range(4)]).shape())
-
-
-    def field_value(self, pos, shape=True) -> list:
-        # 1,3
-        """
-        complex(float(x), 0.0),  # C1 (Real part = x)
-        complex(float(y), 0.0),  # C2 (Real part = y)
-        complex(float(z), 0.0)   # C3 (Real part = z)
-        """
+        # dim X dim
         if shape:
-            return (len(pos), 1)
+            return (
+                dim,
+                dim
+            )
+        return [
+            [0 for _ in range(dim)]
+            for a in range(dim)
+        ]
+
+
+    def field_value(self, pos=None, dim=None) -> list or tuple:
+        # 1, dim
+        """
+
+        """
+        if dim:
+            return (1, dim)
 
         return [
-            0,
             *pos
         ]
 
-    def field_values(self, amount_nodes, dim, distance=None) -> list:
-        # n,n
-        """
-        complex(float(x), 0.0),  # C1 (Real part = x)
-        complex(float(y), 0.0),  # C2 (Real part = y)
-        complex(float(z), 0.0)   # C3 (Real part = z)
-        """
-        return [
-            [i for i in range(len(amount_nodes))]
-            for d in dim
-        ]
 
 
     def gluon_fieldv(self, pos):
@@ -550,13 +584,18 @@ class FieldUtils:
             for _ in range(3)
         ]
 
-    def dmu_fmunu(self):
-        # 14, 4, 4
+    def dmu_fmunu(self, dim, shape=True):
+        # self.shift_dirs, dim, dim
+        if shape is True:
+            return (
+                len(list(self.shift_dirs.values())),
+                dim,
+                dim
+            )
         return [
-            [0j]
-            for _ in range(14)
-            for _ in range(4)
-            for _ in range(4)  # Added 'for _ in range(4)'
+            [0j for b in range(dim)]
+            for a in range(dim)
+            for _ in range(len(list(self.shift_dirs)))
         ]
 
     def get_gauge_field_symbol(self, ntype):
@@ -633,10 +672,10 @@ class FieldUtils:
                 "GAUGE": gauge_couplings,
             },
             "HIGGS": {
-                "FERMION": [
+                "FERMION": {item: ["higgs"] for item in [
                     "top_quark", "bottom_quark", "charm_quark", "strange_quark", "down_quark",
                     "electron", "muon", "tau", "tau_neutrino", "muon_neutrino", "electron_neutrino",
-                ],
-                "GAUGE": ["w_plus", "w_minus", "z_boson"],
+                ]},
+                "GAUGE": {item: ["higgs"] for item in ["w_plus", "w_minus", "z_boson"]},
             }
         }

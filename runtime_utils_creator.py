@@ -13,9 +13,9 @@ import ray
 from ray import get_actor
 
 from qf_utils.all_subs import ALL_SUBS, FERMIONS
-from _ray_core.utils.ray_validator import RayValidator
+from core._ray_core.utils.ray_validator import RayValidator
 
-from qf_utils.qf_utils import QFUtils
+from core.qf_utils.qf_utils import QFUtils
 
 
 class RuntimeUtilsCreator(
@@ -123,7 +123,7 @@ class RuntimeUtilsCreator(
         try:
             ntype = attrs.get("type").lower()
             # print("g_neighbors", ntype)
-            # todo save new data structures
+            # todo save new admin_data structures
             filtered = [[], [], []]
             npxs:list[str] = self.all_px_neighbors(attrs)
             ntypes = self.fermion_to_gauge_couplings[ntype]

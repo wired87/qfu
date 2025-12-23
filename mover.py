@@ -1,5 +1,5 @@
 import numpy as np
-import jax.numpy as jnp
+import numpy
 
 #https://github.com/wired87/qf_utils
 class Mover:
@@ -14,11 +14,11 @@ class Mover:
         self.time_step = 0.001  # seconds
 
     def find_nearest_point_from_pos_list(self, start_pos, points):
-        start = jnp.array(start_pos)
-        points = jnp.array(points)
+        start = np.array(start_pos)
+        points = np.array(points)
 
         distances = np.linalg.norm(points - start, axis=1)
-        nearest_index = jnp.argmin(distances)
+        nearest_index = np.argmin(distances)
         return points[nearest_index], distances[nearest_index]
 
     def get_nearest_neighbors(self, start_pos, neighbors, amount_neighbors=8, pos_attr_key="pos"):
@@ -41,7 +41,7 @@ class Mover:
             if pos is None or neighbor_id == start_pos:
                 continue
 
-            distance = np.linalg.norm(np.array(pos) - jnp.array(start_pos))
+            distance = np.linalg.norm(np.array(pos) - np.array(start_pos))
             distances.append((distance, neighbor_id, neighbor_attrs))
 
         # Sort by distance
@@ -81,8 +81,8 @@ class Mover:
 
         step_size_um = np.sqrt(2 * diffusion * self.time_step)
 
-        self.position = jnp.array(position_um, dtype=float)
-        self.target = jnp.array(target_pos, dtype=float) if target_pos is not None else None
+        self.position = np.array(position_um, dtype=float)
+        self.target = np.array(target_pos, dtype=float) if target_pos is not None else None
 
         if self.target is not None:
             direction = self.target - self.position
@@ -180,7 +180,7 @@ class Mover:
         print("set sub pos")
         for nid, attrs in self.g.G.nodes(data=True):
             if attrs.get("type").upper() == "PIXEL" and "pos" in attrs:
-                base_pos = jnp.array(attrs["pos"])
+                base_pos = np.array(attrs["pos"])
 
                 # Finde Subpunkte
                 subs = self.g.get_neighbor_list(nid, trgt_rel="has_field")
@@ -204,7 +204,7 @@ class Mover:
                     x = np.cos(phi) * r
                     z = np.sin(phi) * r
 
-                    pos = base_pos + ds * jnp.array([x, y, z])
+                    pos = base_pos + ds * np.array([x, y, z])
                     sub_attrs["pos"]=pos.tolist()
                     check_pos.append(
                         (sub_id,  sub_attrs["pos"])

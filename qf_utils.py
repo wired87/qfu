@@ -1,33 +1,29 @@
 import numpy as np
 
-from core.fb_core.real_time_database import FBRTDBMgr
-from core.qf_utils.all_subs import FERMIONS, G_FIELDS, H, ALL_SUBS
-from core.qf_utils.field_utils import FieldUtils
+from data import FERM_PARAMS, GAUGE_FIELDS
+from fb_core.real_time_database import FBRTDBMgr
 from core.sm.fermion.ferm_creator import FermCreator
 from core.sm.gauge.g_creator import GaugeCreator
 from core.sm.higgs.higgs_creator import HiggsCreator
+from qf_utils.all_subs import FERMIONS, G_FIELDS, H, ALL_SUBS
+from qf_utils.field_utils import FieldUtils
 from utils.file._csv import dict_2_csv
-
 from utils.graph.local_graph_utils import GUtils
 
 class QFUtils(FieldUtils):
 
     def __init__(
             self,
-            user_id,
-            env_id,
             g=None,
             G=None,
             testing=False
     ):
         super().__init__()
-        if G and not g:self.g = GUtils(user_id, G=G)
+        if G and not g:self.g = GUtils(G=G)
         else: self.g=g
 
         self.field_utils = FieldUtils()
-        self.user_id = user_id
-        self.env_id = env_id
-        self.database = f"users/{self.user_id}/env/{self.env_id}"
+        # self.user_id = user_id
         self.metadata_path = "metadata"
         self.testing = testing
 
@@ -49,6 +45,15 @@ class QFUtils(FieldUtils):
         if self.testing is True:
             self.db_manager=FBRTDBMgr()
 
+    def filter_ntype(self, ntype):
+        """
+        REMOVE INDEXING FROM NTYPE
+        """
+        last_part = ntype.split("_")[-1]
+        print("last_part", last_part)
+        if last_part.isdigit():
+            ntype = ntype.replace(f"_{last_part}", "")
+        return ntype
 
     def get_parent(self, ntype):
         ntype = ntype.lower()
@@ -119,57 +124,93 @@ class QFUtils(FieldUtils):
         Create the fundament for a interaction G in
         the sm
         """
+
+        # ADD MODULEE
+        for i, (src_layer, interactant_struct) in enumerate(self.couplings.items()):
+            if not self.g.G.has_node(src_layer):
+                self.g.add_node(
+                    dict(
+                        nid=src_layer.upper(),
+                        type="MODULE",
+                        module_inde=i
+                    )
+                )
+
         for ntype in ALL_SUBS:
+            # create batch attrs
+            field_value = self.batch_field_single(
+                ntype,
+                dim=4
+            )
+            print(f"field_value set {ntype}", field_value)
+
+            # set axis def
+            axis_def = self.set_axis(field_value)
+
             self.g.add_node(
                 dict(
                     nid=ntype,
                     type="FIELD",
-                    parent=[self.parent_ntype(ntype)]
+                    parent=[self.parent_ntype(ntype)],
+                    value=list(field_value.values()),
+                    field_keys=list(field_value.keys()),
+                    axis_def=axis_def,
                 )
             )
+            print("add field node", ntype)
 
-
-
-            #link field
 
         for src_layer, interactant_struct in self.couplings.items():
-            for trgt_layer, trgt_struct in interactant_struct.items():
+            for i, (trgt_layer, trgt_struct) in enumerate(interactant_struct.items()):
+                #print("trgt_layer, trgt_struct", trgt_layer, trgt_struct)
                 for ntype, interactants in trgt_struct.items():
+                    ntype = ntype.upper()
                     self.add_edges_from_map(
-                        nid=ntype,
+                        ntype=ntype,
                         src_type=src_layer,
                         interactants=interactants,
-                        interactant_parent=trgt_layer
+                        field_index=i,
                     )
 
-
-
-
-
+    def set_axis(self, data):
+        """
+        Determines the vmap axis for each parameter in the admin_data bundle.
+        - Use axis 0 for array-like admin_data (map over it).
+        - Use None for scalar admin_data (broadcast it).
+        """
+        return tuple(
+            0
+            if not isinstance(param, (int, float))
+            else None
+            for param in data
+        )
 
 
     # Helper to add edges safely and set metadata
-    def add_edges_from_map(self, nid, src_type, interactants, interactant_parent):
+    def add_edges_from_map(self, ntype, src_type, interactants, field_index):
         # mapping can be dict-of-lists or dict-of-dicts
-        if not self.g.G.has_node(interactant_parent):
-            self.g.add_node(
-                dict(
-                    nid=interactant_parent,
-                    type="MODULE"
-                )
-            )
-
         for neighbor in interactants:
+            # field -> field
             self.g.add_edge(
-                src=nid,
-                trgt=neighbor,
+                src=ntype,
+                trt=neighbor.upper(),
                 attrs=dict(
-                    rel="has_finteractant",
-                    src_layer=src_type,
-                    trgt_layer="MODULE",
+                    rel="has_interactant",
+                    src_layer="FIELD",
+                    trgt_layer="FIELD",
                 )
             )
 
+        # module -> field
+        self.g.add_edge(
+            src=src_type.upper(),
+            trt=ntype,
+            attrs=dict(
+                rel="has_finteractant",
+                src_layer="MODULE",
+                trgt_layer="FIELD",
+            )
+        )
 
 
     def get_npm_values(
@@ -257,7 +298,7 @@ class QFUtils(FieldUtils):
             node_pos_dict = {node: np.array(attrs.get("pos")) for node, attrs in all_pixel_nodes}
 
             for direction_name, direction_matrix in self.direction_definitions.items():
-                offset = np.array(direction_matrix) * ENVC["d"]
+                offset = np.array(direction_matrix) * self.env["d"]
                 pos_plus = self_pos + offset
                 pos_minus = self_pos - offset
 
@@ -408,10 +449,6 @@ class QFUtils(FieldUtils):
             elif ntype.lower() in G_FIELDS:
                 attrs = self.g_creator.gfield(
                     ntype,
-                    light=light,
-                    px_id=px_id,
-                    nid = nid,
-                    pos=pos,
                 )
 
             # add parent px -> table query
@@ -466,83 +503,87 @@ class QFUtils(FieldUtils):
     def batch_field_single(
             self,
             ntype,
-            amount_nodes,
-            dim,
+            dim:int=4,
             just_k=False,
             just_v=False,
-            param_struct=None,
+            param_struct={},
     ) -> list or dict:
-        attrs=[]
-        # daten 100% auf cpu
+        attrs=[] #todo
+        ntype = ntype.lower()
         try:
             if ntype in FERMIONS or ntype == "FERMION":
                 attrs = self.ferm_creator.create_f_core_batch(
-                    ntype,
-                    amount_nodes,
-                    dim
+                    self.filter_ntype(ntype),
+                    dim,
                 )
 
             elif ntype in H or ntype == "HIGGS":
                 attrs = self.higgs_creator.higgs_params_batch(
-                    amount_nodes,
                     dim
                 )
 
             elif ntype in G_FIELDS or ntype == "GAUGE":
                 attrs = self.g_creator.gfield(
-                    ntype, dim, amount_nodes
+                    self.filter_ntype(ntype),
+                    dim,
                 )
 
             else:
-                # YEEEAAAHH
+                print("YEEEAAAHH", ntype)
                 attrs = self.create_synthetic_default(
-                    param_struct=param_struct
+                    param_struct=param_struct,
                 )
 
             # add params to node
             # create param nodes
-            for k, v in attrs.items():
-                self.g.add_node(
-                    dict(
-                        nid=k,
-                        type="PARAM",
-                        value=v[0],
-                        parent=[self.parent_ntype(ntype)]
+            try:
+                for k, v in attrs.items():
+                    self.g.add_node(
+                        dict(
+                            nid=k,
+                            type="PARAM",
+                            value=v,
+                            parent=[self.parent_ntype(ntype)]
+                        )
                     )
-                )
 
-                # PARAM -> FIELD
-                self.g.add_edge(
-                    src=ntype,
-                    trgt=k,
-                    attrs=dict(
-                        rel='has_param',
-                        trgt_layer='PARAM',
-                        src_layer='FIELD',
+                    # PARAM -> FIELD
+                    self.g.add_edge(
+                        src=ntype,
+                        trt=k,
+                        attrs=dict(
+                            rel='has_param',
+                            trgt_layer='PARAM',
+                            src_layer='FIELD',
+                        )
                     )
-                )
+            except Exception as e:
+                print("Err add params to node", e)
 
             if just_k:
                 return list(attrs.keys())
-
             if just_v:
                 return list(attrs.values())
 
         except Exception as e:
-            print(f"Err get_attrs_from_ntype: {e}")
+            print(f"Err batch_field_single: {e}")
+
         return attrs
 
 
     def create_synthetic_default(
             self,
-            param_struct: dict
+            param_struct: dict,
     ):
-        field_value = self.field_values(self.amount_nodes, DIM)
+        print("CREATE SYNTHETIC FIELD")
+        field_value = self.field_value(dim=self.dim) #todo change
 
         return {
             key: (value if value is not None else field_value)
             for key, value in param_struct.items()
         }
+
+
 
     def change_state(self):
         """Changes state of ALL metadata entries"""
@@ -580,8 +621,8 @@ class QFUtils(FieldUtils):
         initial_data = self.db_manager._fetch_g_data(
         )
 
-        # Build a G from init data and load in self.g
-        self.g.build_G_from_data(initial_data, self.env_id)
+        # Build a G from init admin_data and load in self.g
+        self.g.build_G_from_data(initial_data)
 
     def get_all_node_sub_fields(self, nid, as_dict=False, edges=False):
         # get intern qf parents
@@ -598,8 +639,8 @@ class QFUtils(FieldUtils):
             node=nid,
             target_type=[k.upper() for k, v in GAUGE_FIELDS.items()],
         )
-        # michael.kobel@tu-dresden.de
 
+        # michael.kobel@tu-dresden.de
         if as_dict is True:
             all_subs = {
                 "PHI": phi,
