@@ -268,7 +268,7 @@ class FieldUtils:
             'mass': [0.000511, 0.10566, 1.777, 0.00255, 0.0048, 1.27, 0.095, 4.7, 172, 0.05, 0.05, 0.05]
         }
 
-    def create_env(self, world_cfg=None):
+    def create_env(self, world_cfg:dict={}):
         """
         Create an ENVC layer (Environment Control Layer)
         which manages global fields/states like temperature, etc.
@@ -280,19 +280,19 @@ class FieldUtils:
             pm_axes=self.get_dirs(),
             parent=["USERS"],
             i=1j,
-            world_cfg=world_cfg,
+            **world_cfg,
             **ENV,
         )
 
         return env
 
     def get_dirs(self):
+        # get_dirs
         plus = list(self.shift_dirs.values())
 
         minus = []
 
         for dir_str, struct in self.shift_dirs.items():
-
             n_struct = []
 
             for dir in struct:
@@ -304,6 +304,7 @@ class FieldUtils:
                     n_struct.append(int(dir * -1))
 
             minus.append(tuple(n_struct))
+
         axes = [plus, minus]
         return axes
 
@@ -317,7 +318,6 @@ class FieldUtils:
             parent = "GAUGE"
         elif ntype in H:
             parent = "HIGGS"
-        print("parent identifiziert", parent)
         return parent
 
 

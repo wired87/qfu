@@ -19,8 +19,10 @@ class QFUtils(FieldUtils):
             testing=False
     ):
         super().__init__()
-        if G and not g:self.g = GUtils(G=G)
-        else: self.g=g
+        if G is not None and g is None:
+            self.g = GUtils(G=G)
+        else:
+            self.g=g
 
         self.field_utils = FieldUtils()
         # self.user_id = user_id
@@ -50,7 +52,7 @@ class QFUtils(FieldUtils):
         REMOVE INDEXING FROM NTYPE
         """
         last_part = ntype.split("_")[-1]
-        print("last_part", last_part)
+        #print("last_part", last_part)
         if last_part.isdigit():
             ntype = ntype.replace(f"_{last_part}", "")
         return ntype
@@ -139,10 +141,9 @@ class QFUtils(FieldUtils):
         for ntype in ALL_SUBS:
             # create batch attrs
             field_value = self.batch_field_single(
-                ntype,
-                dim=4
+                ntype.upper(),
+                dim=4,
             )
-            print(f"field_value set {ntype}", field_value)
 
             # set axis def
             axis_def = self.set_axis(field_value)
@@ -157,8 +158,6 @@ class QFUtils(FieldUtils):
                     axis_def=axis_def,
                 )
             )
-            print("add field node", ntype)
-
 
         for src_layer, interactant_struct in self.couplings.items():
             for i, (trgt_layer, trgt_struct) in enumerate(interactant_struct.items()):
@@ -166,7 +165,7 @@ class QFUtils(FieldUtils):
                 for ntype, interactants in trgt_struct.items():
                     ntype = ntype.upper()
                     self.add_edges_from_map(
-                        ntype=ntype,
+                        ntype=ntype.upper(),
                         src_type=src_layer,
                         interactants=interactants,
                         field_index=i,
@@ -503,63 +502,41 @@ class QFUtils(FieldUtils):
     def batch_field_single(
             self,
             ntype,
-            dim:int=4,
+            dim:int=3,
             just_k=False,
             just_v=False,
             param_struct={},
     ) -> list or dict:
         attrs=[] #todo
-        ntype = ntype.lower()
+        field_id = ntype
+        l_ntype = ntype.lower()
         try:
-            if ntype in FERMIONS or ntype == "FERMION":
+            if l_ntype in FERMIONS or l_ntype == "FERMION":
                 attrs = self.ferm_creator.create_f_core_batch(
-                    self.filter_ntype(ntype),
+                    self.filter_ntype(l_ntype),
                     dim,
                 )
 
-            elif ntype in H or ntype == "HIGGS":
+            elif l_ntype in H or l_ntype == "HIGGS":
                 attrs = self.higgs_creator.higgs_params_batch(
                     dim
                 )
 
-            elif ntype in G_FIELDS or ntype == "GAUGE":
+            elif l_ntype in G_FIELDS or l_ntype == "GAUGE":
                 attrs = self.g_creator.gfield(
-                    self.filter_ntype(ntype),
+                    self.filter_ntype(l_ntype),
                     dim,
                 )
 
             else:
-                print("YEEEAAAHH", ntype)
+                print("YEEEAAAHH", l_ntype)
                 attrs = self.create_synthetic_default(
                     param_struct=param_struct,
                 )
 
             # add params to node
             # create param nodes
-            try:
-                for k, v in attrs.items():
-                    self.g.add_node(
-                        dict(
-                            nid=k,
-                            type="PARAM",
-                            value=v,
-                            parent=[self.parent_ntype(ntype)]
-                        )
-                    )
-
-                    # PARAM -> FIELD
-                    self.g.add_edge(
-                        src=ntype,
-                        trt=k,
-                        attrs=dict(
-                            rel='has_param',
-                            trgt_layer='PARAM',
-                            src_layer='FIELD',
-                        )
-                    )
-            except Exception as e:
-                print("Err add params to node", e)
-
+            self.add_params_link_fields(attrs, field_id, self.parent_ntype(l_ntype))
             if just_k:
                 return list(attrs.keys())
             if just_v:
@@ -570,6 +547,30 @@ class QFUtils(FieldUtils):
 
         return attrs
 
+    def add_params_link_fields(self, attrs, field_id, parent):
+        try:
+            for k, v in attrs.items():
+                self.g.add_node(
+                    dict(
+                        nid=k,
+                        type="PARAM",
+                        value=v,
+                        parent=[parent]
+                    )
+                )
+
+                # PARAM -> FIELD
+                self.g.add_edge(
+                    src=field_id,
+                    trt=k,
+                    attrs=dict(
+                        rel='has_param',
+                        trgt_layer='PARAM',
+                        src_layer='FIELD',
+                    )
+                )
+        except Exception as e:
+            print("Err add params to node", e)
 
     def create_synthetic_default(
             self,
