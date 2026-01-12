@@ -42,8 +42,6 @@ class QFUtils(FieldUtils):
             g=self.g,
         )
 
-        self.build_interacion_G()
-
         if self.testing is True:
             self.db_manager=FBRTDBMgr()
 
@@ -57,16 +55,16 @@ class QFUtils(FieldUtils):
             ntype = ntype.replace(f"_{last_part}", "")
         return ntype
 
+
     def get_parent(self, ntype):
         ntype = ntype.lower()
+        parent = None
         if ntype in FERMIONS:
             parent = "FERMION"
         elif ntype in G_FIELDS:
             parent = "GAUGE"
         elif ntype in H:
             parent = "HIGGS"
-        else:
-            parent = self.g.G.nodes[ntype]["parent"][0]
         return parent
 
 
@@ -134,28 +132,36 @@ class QFUtils(FieldUtils):
                     dict(
                         nid=src_layer.upper(),
                         type="MODULE",
-                        module_inde=i
+                        module_index=i
                     )
                 )
 
+        # CREATE FIELDS
         for ntype in ALL_SUBS:
+            ntype=ntype.upper()
             # create batch attrs
             field_value = self.batch_field_single(
-                ntype.upper(),
-                dim=4,
+                ntype,
+                dim=3,
             )
 
             # set axis def
-            axis_def = self.set_axis(field_value)
+            axis_def = self.set_axis(list(field_value.values()))
+
+            interactant_fields = [f.upper() for f in self.set_interactions_fild(ntype)]
+            print(f"interactant_fields for field {ntype}", interactant_fields)
 
             self.g.add_node(
                 dict(
                     nid=ntype,
                     type="FIELD",
                     parent=[self.parent_ntype(ntype)],
-                    value=list(field_value.values()),
-                    field_keys=list(field_value.keys()),
+                    values=list(field_value.values()),
+
+                    keys=list(field_value.keys()),
                     axis_def=axis_def,
+                    interactant_fields=interactant_fields,
+                    module_id=self.get_parent(ntype),
                 )
             )
 
@@ -165,11 +171,26 @@ class QFUtils(FieldUtils):
                 for ntype, interactants in trgt_struct.items():
                     ntype = ntype.upper()
                     self.add_edges_from_map(
-                        ntype=ntype.upper(),
+                        ntype=ntype,
                         src_type=src_layer,
                         interactants=interactants,
                         field_index=i,
                     )
+        print("build_interacion_G... done")
+
+
+    def set_interactions_fild(self, field_id):
+        print("set_interactions_fild")
+        all_interactants = []
+        for src_layer, interactant_struct in self.couplings.items():
+            for i, (trgt_layer, trgt_struct) in enumerate(interactant_struct.items()):
+                #print("trgt_layer, trgt_struct", trgt_layer, trgt_struct)
+                for ntype, interactants in trgt_struct.items():
+                    if field_id.upper() == ntype.upper():
+                        all_interactants.extend(interactants)
+        print("set_interactions_fild... done")
+        return all_interactants
+
 
     def set_axis(self, data):
         """
@@ -191,7 +212,7 @@ class QFUtils(FieldUtils):
         for neighbor in interactants:
             # field -> field
             self.g.add_edge(
-                src=ntype,
+                src=ntype.upper(),
                 trt=neighbor.upper(),
                 attrs=dict(
                     rel="has_interactant",
@@ -536,7 +557,7 @@ class QFUtils(FieldUtils):
 
             # add params to node
             # create param nodes
-            self.add_params_link_fields(attrs, field_id, self.parent_ntype(l_ntype))
+            #self.add_params_link_fields(attrs, field_id, self.parent_ntype(l_ntype))
             if just_k:
                 return list(attrs.keys())
             if just_v:
@@ -544,12 +565,16 @@ class QFUtils(FieldUtils):
 
         except Exception as e:
             print(f"Err batch_field_single: {e}")
-
         return attrs
 
-    def add_params_link_fields(self, attrs, field_id, parent):
+
+    def check_field_id_sm(self, field_id):
+        return field_id in FERMIONS or field_id in G_FIELDS or field_id in H
+
+
+    def add_params_link_fields(self, keys, values, field_id, parent):
         try:
-            for k, v in attrs.items():
+            for k, v in zip(keys, values):
                 self.g.add_node(
                     dict(
                         nid=k,

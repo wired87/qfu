@@ -13,18 +13,15 @@ import ray
 from ray import get_actor
 
 from qf_utils.all_subs import ALL_SUBS, FERMIONS
-from core._ray_core.utils.ray_validator import RayValidator
-
-from core.qf_utils.qf_utils import QFUtils
+from qf_utils.qf_utils import QFUtils
 
 
 class RuntimeUtilsCreator(
-    RayValidator,
     QFUtils,
 ):
 
     def __init__(self, g):
-        super().__init__(g_utils=g)
+        super().__init__(self)
         QFUtils.__init__(self, g)
         self.updator = None
         self.g = g

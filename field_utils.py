@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 from data import ENV
-from qf_utils.all_subs import GLON_MAP, FERMIONS, G_FIELDS, H
+from qf_utils.all_subs import GLON_MAP, FERMIONS, G_FIELDS, H, QUARKS
 
 
 class FieldUtils:
@@ -157,12 +157,7 @@ class FieldUtils:
             "tau_neutrino",  # ν_τ
 
             # Quarks
-            "up_quark",  # ψᵤ
-            "down_quark",  # ψ_d
-            "charm_quark",  # ψ_c
-            "strange_quark",  # ψ_s
-            "top_quark",  # ψ_t
-            "bottom_quark"  # ψ_b
+            *QUARKS
         ]
 
         self.g_qcd=[
@@ -206,31 +201,24 @@ class FieldUtils:
         self.gauge_to_fermion_couplings = {
             "photon": [
                 "electron", "muon", "tau",
-                "up_quark", "down_quark", "charm_quark",
-                "strange_quark", "top_quark", "bottom_quark"
+                *QUARKS
             ],
             "w_plus": [
                 "electron", "muon", "tau",
                 "electron_neutrino", "muon_neutrino", "tau_neutrino",
-                "up_quark", "down_quark", "charm_quark",
-                "strange_quark", "top_quark", "bottom_quark"
+                *QUARKS
             ],
             "w_minus": [
                 "electron", "muon", "tau",
                 "electron_neutrino", "muon_neutrino", "tau_neutrino",
-                "up_quark", "down_quark", "charm_quark",
-                "strange_quark", "top_quark", "bottom_quark"
+                *QUARKS
             ],
             "z_boson": [
                 "electron", "muon", "tau",
                 "electron_neutrino", "muon_neutrino", "tau_neutrino",
-                "up_quark", "down_quark", "charm_quark",
-                "strange_quark", "top_quark", "bottom_quark"
+                *QUARKS
             ],
-            "gluon": [
-                "up_quark", "down_quark", "charm_quark",
-                "strange_quark", "top_quark", "bottom_quark"
-            ]
+            "gluon": QUARKS
         }
 
         self.all_sub_fields = [
@@ -268,7 +256,7 @@ class FieldUtils:
             'mass': [0.000511, 0.10566, 1.777, 0.00255, 0.0048, 1.27, 0.095, 4.7, 172, 0.05, 0.05, 0.05]
         }
 
-    def create_env(self, world_cfg:dict={}):
+    def create_env(self, world_cfg:dict=dict()):
         """
         Create an ENVC layer (Environment Control Layer)
         which manages global fields/states like temperature, etc.
@@ -279,11 +267,8 @@ class FieldUtils:
             type="ENV",
             pm_axes=self.get_dirs(),
             parent=["USERS"],
-            i=1j,
             **world_cfg,
-            **ENV,
         )
-
         return env
 
     def get_dirs(self):
@@ -505,7 +490,6 @@ class FieldUtils:
             print("Err _get_gauge_generator", e)
 
 
-
     def restore_selfdict(self, data):
         new_dict = {}
         #print("restore_selfdict admin_data B4:", admin_data)
@@ -531,6 +515,7 @@ class FieldUtils:
                 len(list(self.shift_dirs.values())),
                 dim,
             )
+
         return [
             self.field_value(dim=dim)
             for _ in range(len(list(self.shift_dirs.values())))
@@ -626,15 +611,12 @@ class FieldUtils:
 
 
     def set_interaction(self):
-        QUARK_FLAVORS = ["up", "down", "charm", "strange", "top", "bottom"]
-
-        ggc = {k: [g for g in GLON_MAP if g != k] for k in GLON_MAP}
+        ggc = {k: [*QUARKS, *[g for g in GLON_MAP if g != k]] for k in GLON_MAP}
 
         # qmap: each quark color has photon, w+, w-, z and all gluons
         qmap = {
-            f"{flavor}_quark_{i}": ["photon", "w_plus", "w_minus", "z_boson", *GLON_MAP]
-            for flavor in QUARK_FLAVORS
-            for i in range(3)
+            q: ["photon", "w_plus", "w_minus", "z_boson", *GLON_MAP]
+            for q in QUARKS
         }
 
         neutrino_couplings = {
@@ -661,6 +643,12 @@ class FieldUtils:
             **ggc,
         }
 
+        self.modules_fields = {
+            "FERMION": FERMIONS,
+            "GAUGE": G_FIELDS,
+            "HIGGS": H,
+        }
+
         self.couplings = {
             "FERMION": {
                 "HIGGS": {ferm: ["higgs"] for ferm in FERMIONS},
@@ -673,7 +661,7 @@ class FieldUtils:
             },
             "HIGGS": {
                 "FERMION": {item: ["higgs"] for item in [
-                    "top_quark", "bottom_quark", "charm_quark", "strange_quark", "down_quark",
+                    *QUARKS,
                     "electron", "muon", "tau", "tau_neutrino", "muon_neutrino", "electron_neutrino",
                 ]},
                 "GAUGE": {item: ["higgs"] for item in ["w_plus", "w_minus", "z_boson"]},
