@@ -591,7 +591,7 @@ class FieldUtils:
             "w_plus": "W⁺",  # W+
             "w_minus": "W⁻",  # W-
             "z_boson": "Z⁰",  # Z
-            "higgs": "H",  # Higgs
+            "phi": "H",  # Higgs
             "b_field": "B",  # Hypercharge
             "w_field": "W",  # Weak isospin
         }
@@ -651,19 +651,19 @@ class FieldUtils:
 
         self.couplings = {
             "FERMION": {
-                "HIGGS": {ferm: ["higgs"] for ferm in FERMIONS},
+                "HIGGS": {ferm: ["phi"] for ferm in FERMIONS},
                 "GAUGE": fermion_g_couplings,
             },
             "GAUGE": {
-                "HIGGS": {g: ["higgs"] for g in ["w_plus", "w_minus", "z_boson"]},
+                "HIGGS": {g: ["phi"] for g in ["w_plus", "w_minus", "z_boson"]},
                 "FERMION": fermion_g_couplings,
                 "GAUGE": gauge_couplings,
             },
             "HIGGS": {
-                "FERMION": {item: ["higgs"] for item in [
+                "FERMION": {"phi": [
                     *QUARKS,
                     "electron", "muon", "tau", "tau_neutrino", "muon_neutrino", "electron_neutrino",
                 ]},
-                "GAUGE": {item: ["higgs"] for item in ["w_plus", "w_minus", "z_boson"]},
+                "GAUGE": {"phi": ["w_plus", "w_minus", "z_boson"]},
             }
         }

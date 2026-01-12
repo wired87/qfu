@@ -14,7 +14,7 @@ G_FIELDS=[
 
 
 H = [
-    "higgs"
+    "phi" # avoid call it higgs becaus moduel ahs same name
 ]
 
 QUARKS = [f"{flav}_quark_{i}" for flav in QUARK_FLAVORS for i in range(3)]
