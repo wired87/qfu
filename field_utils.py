@@ -28,7 +28,6 @@ class FieldUtils:
         
         self.dim=int(os.getenv("DIM", 4))
 
-        self.env = self.create_env()
 
         self.lambda_1 = np.array([
             [0, 1, 0],
@@ -57,9 +56,10 @@ class FieldUtils:
             [0, 1, 0],
         ], dtype=complex)
 
-        self.lambda_7 = np.array([[0, 0, 0],
-                                  [0, 0, -1j],
-                                  [0, 1j, 0]], dtype=complex)
+        self.lambda_7 = np.array(
+            [[0, 0, 0],
+                  [0, 0, -1j],
+                  [0, 1j, 0]], dtype=complex)
 
         self.lambda_8 = (1 / np.sqrt(3)) * np.array(
         [[1, 0, 0],
@@ -130,7 +130,8 @@ class FieldUtils:
         self.gamma_3 = np.array([[0, 0, 1, 0],
                             [0, 0, 0, -1],
                             [-1, 0, 0, 0],
-                            [0, 1, 0, 0]], dtype=complex)
+                            [0, 1, 0, 0]
+                                 ], dtype=complex)
 
         self.gamma = [self.gamma_0, self.gamma_1, self.gamma_2, self.gamma_3]
         self.gamma0_inv = np.linalg.inv(self.gamma[0])  # (4,4) matrix
@@ -145,7 +146,14 @@ class FieldUtils:
             "top": {"down": 0.009, "strange": 0.040, "bottom": 0.999},
         }
 
-
+        self.parameters = {
+            "o_operators": self.o_operators,
+            "gamma": self.gamma,
+            "g_generator": self.g_generator,
+            "gamma0_inv": self.gamma0_inv,
+            "minkovski_tensor": self.mt,
+            "i": 1j,
+        }
 
         self.fermion_fields = [
             # Leptonen
@@ -155,7 +163,7 @@ class FieldUtils:
             "electron_neutrino",  # νₑ
             "muon_neutrino",  # ν_μ
             "tau_neutrino",  # ν_τ
-
+        
             # Quarks
             *QUARKS
         ]
@@ -256,6 +264,9 @@ class FieldUtils:
             'mass': [0.000511, 0.10566, 1.777, 0.00255, 0.0048, 1.27, 0.095, 4.7, 172, 0.05, 0.05, 0.05]
         }
 
+        self.env = self.create_env()
+
+
     def create_env(self, world_cfg:dict=dict()):
         """
         Create an ENVC layer (Environment Control Layer)
@@ -266,8 +277,9 @@ class FieldUtils:
         env = dict(
             type="ENV",
             pm_axes=self.get_dirs(),
-            parent=["USERS"],
             **world_cfg,
+            **ENV,
+            **self.parameters
         )
         return env
 

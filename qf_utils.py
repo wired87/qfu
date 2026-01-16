@@ -1,7 +1,9 @@
+import pprint
+
 import numpy as np
 
-from data import FERM_PARAMS, GAUGE_FIELDS
-from fb_core.real_time_database import FBRTDBMgr
+from data import FERM_PARAMS, GAUGE_FIELDS, ENV
+
 from core.sm.fermion.ferm_creator import FermCreator
 from core.sm.gauge.g_creator import GaugeCreator
 from core.sm.higgs.higgs_creator import HiggsCreator
@@ -42,8 +44,32 @@ class QFUtils(FieldUtils):
             g=self.g,
         )
 
-        if self.testing is True:
-            self.db_manager=FBRTDBMgr()
+
+    def get_modules_methods(self, mid):
+        print("get_modules_methods...")
+        methods = {}
+        method_nodes = self.g.get_neighbor_list_rel(
+            trgt_rel="has_method",
+            node=mid,
+            as_dict=True,
+        )
+        methods.update(method_nodes)
+
+        params = self.g.get_neighbor_list_rel(
+            trgt_rel="has_param",
+            node=mid,
+            as_dict=True,
+        )
+
+        for pid, pattrs in params.items():
+            if "code" in pattrs:
+                # method
+                methods[pid] = pattrs
+
+        pprint.pp(methods)
+        print("get_modules_methods... done", )
+        return methods
+
 
     def filter_ntype(self, ntype):
         """
@@ -116,8 +142,29 @@ class QFUtils(FieldUtils):
         return nid_map
 
 
-    ########
-    # INTERACTANT G DEF
+    def build_parameter(self):
+        print("build_parameter...")
+        for pid, pval in self.parameters.items():
+            self.g.add_node(
+                dict(
+                    nid=pid,
+                    type="PARAM",
+                    value=pval
+                )
+            )
+
+        for key, value in ENV.items():
+            self.g.add_node(
+                dict(
+                    nid=key,
+                    type="PARAM",
+                    value=value
+                )
+            )
+        print("build_parameter... done")
+
+
+
 
     def build_interacion_G(self):
         """
@@ -146,18 +193,21 @@ class QFUtils(FieldUtils):
             )
 
             # set axis def
-            axis_def = self.set_axis(list(field_value.values()))
+            axis_def = self.set_axis(
+                list(field_value.values())
+            )
 
             interactant_fields = [f.upper() for f in self.set_interactions_fild(ntype)]
-            print(f"interactant_fields for field {ntype}", interactant_fields)
+            #print(f"interactant_fields for field {ntype}", interactant_fields)
 
             self.g.add_node(
                 dict(
                     nid=ntype,
                     type="FIELD",
-                    parent=[self.parent_ntype(ntype)],
+                    parent=[
+                        self.parent_ntype(ntype),
+                    ],
                     values=list(field_value.values()),
-
                     keys=list(field_value.keys()),
                     axis_def=axis_def,
                     interactant_fields=interactant_fields,
@@ -180,7 +230,7 @@ class QFUtils(FieldUtils):
 
 
     def set_interactions_fild(self, field_id):
-        print("set_interactions_fild")
+        #print("set_interactions_fild")
         all_interactants = []
         for src_layer, interactant_struct in self.couplings.items():
             for i, (trgt_layer, trgt_struct) in enumerate(interactant_struct.items()):
@@ -188,11 +238,11 @@ class QFUtils(FieldUtils):
                 for ntype, interactants in trgt_struct.items():
                     if field_id.upper() == ntype.upper():
                         all_interactants.extend(interactants)
-        print("set_interactions_fild... done")
+        #print("set_interactions_fild... done")
         return all_interactants
 
 
-    def set_axis(self, data):
+    def set_axis(self, data_keys:list[str]):
         """
         Determines the vmap axis for each parameter in the admin_data bundle.
         - Use axis 0 for array-like admin_data (map over it).
@@ -200,9 +250,9 @@ class QFUtils(FieldUtils):
         """
         return tuple(
             0
-            if not isinstance(param, (int, float))
+            if not p in self.env
             else None
-            for param in data
+            for p in data_keys
         )
 
 
@@ -226,7 +276,7 @@ class QFUtils(FieldUtils):
             src=src_type.upper(),
             trt=ntype,
             attrs=dict(
-                rel="has_finteractant",
+                rel="has_field",
                 src_layer="MODULE",
                 trgt_layer="FIELD",
             )
