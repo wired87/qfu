@@ -3,6 +3,7 @@ import os
 import numpy as np
 from data import ENV
 from qf_utils.all_subs import GLON_MAP, FERMIONS, G_FIELDS, H, QUARKS
+from utils.serialize_complex import serialize_complex_dict
 
 
 class FieldUtils:
@@ -62,10 +63,10 @@ class FieldUtils:
                   [0, 1j, 0]], dtype=complex)
 
         self.lambda_8 = (1 / np.sqrt(3)) * np.array(
-        [[1, 0, 0],
+            [[1, 0, 0],
              [0, 1, 0],
             [0, 0, -2]
-         ], dtype=complex)
+         ])
 
         self.o_operators = [
             self.lambda_1,
@@ -93,19 +94,11 @@ class FieldUtils:
             [0, -1]
         ], dtype=complex)
 
-        self.g_generator = [
+        self.T = [
             self.T1,
             self.T2,
             self.T3
         ]
-
-        self.vertex_combi_map = {
-            "z_boson": [],
-            "photon": [],
-            "w_plus": [],
-            "w_minus": [],
-            "gluon": [],
-        }
 
         ### GAMMA ###
         self.gamma_0 = np.array([
@@ -137,6 +130,25 @@ class FieldUtils:
         self.gamma0_inv = np.linalg.inv(self.gamma[0])  # (4,4) matrix
 
         self.mt = np.diag([1, -1, -1, -1]) #minkowski_tensor
+
+        self.vertex_combi_map = {
+            "z_boson": [],
+            "photon": [],
+            "w_plus": [],
+            "w_minus": [],
+            "gluon": [],
+        }
+
+
+        self.parameters = {
+            "o_operators": self.o_operators,
+            "gamma": self.gamma,
+            "T": self.T,
+            "gamma0_inv": self.gamma0_inv,
+            "minkovski_tensor": self.mt,
+            "i": 1j
+        }
+
         self.triple_vertex_schema = np.zeros((4, 4, 4), dtype=complex)
         self.quad_vertex_schema = np.zeros((4, 4, 4, 4), dtype=complex)
 
@@ -144,15 +156,6 @@ class FieldUtils:
             "up": {"down": 0.974, "strange": 0.225, "bottom": 0.004},
             "charm": {"down": 0.225, "strange": 0.973, "bottom": 0.041},
             "top": {"down": 0.009, "strange": 0.040, "bottom": 0.999},
-        }
-
-        self.parameters = {
-            "o_operators": self.o_operators,
-            "gamma": self.gamma,
-            "g_generator": self.g_generator,
-            "gamma0_inv": self.gamma0_inv,
-            "minkovski_tensor": self.mt,
-            "i": 1j,
         }
 
         self.fermion_fields = [
@@ -267,7 +270,10 @@ class FieldUtils:
         self.env = self.create_env()
 
 
-    def create_env(self, world_cfg:dict=dict()):
+    def create_env(
+            self,
+            world_cfg:dict=dict()
+    ):
         """
         Create an ENVC layer (Environment Control Layer)
         which manages global fields/states like temperature, etc.
@@ -275,7 +281,6 @@ class FieldUtils:
         # todo customize settings -> read from received yaml -> incl tiemsteps
         # todo dev: apply envid
         env = dict(
-            type="ENV",
             pm_axes=self.get_dirs(),
             **world_cfg,
             **ENV,
@@ -522,11 +527,11 @@ class FieldUtils:
         return g_V
 
     def dmu(self, dim:int, shape=True):
-        if shape:
+        """if shape:
             return (
                 len(list(self.shift_dirs.values())),
                 dim,
-            )
+            )"""
 
         return [
             self.field_value(dim=dim)
@@ -544,11 +549,13 @@ class FieldUtils:
         ], dtype=complex)
         """
         # dim X dim
+        """
         if shape:
             return (
                 dim,
                 dim
             )
+        """
         return [
             [0 for _ in range(dim)]
             for a in range(dim)
@@ -560,14 +567,7 @@ class FieldUtils:
         """
 
         """
-        if dim:
-            return (1, dim)
-
-        return [
-            *pos
-        ]
-
-
+        return [0 for _ in range(dim)]
 
     def gluon_fieldv(self, pos):
         return [
@@ -583,16 +583,20 @@ class FieldUtils:
 
     def dmu_fmunu(self, dim, shape=True):
         # self.shift_dirs, dim, dim
+        """
         if shape is True:
             return (
                 len(list(self.shift_dirs.values())),
                 dim,
                 dim
             )
+        """
         return [
-            [0j for b in range(dim)]
-            for a in range(dim)
-            for _ in range(len(list(self.shift_dirs)))
+            [
+                [0 for b in range(dim)]      # (3) Spalten (dim)
+                for a in range(dim)          # (2) Zeilen (dim)
+            ]
+            for _ in range(len(self.shift_dirs)) # (1) Operatoren (num_ops)
         ]
 
     def get_gauge_field_symbol(self, ntype):

@@ -1,4 +1,5 @@
 import pprint
+from typing import Any
 
 import numpy as np
 
@@ -11,6 +12,8 @@ from qf_utils.all_subs import FERMIONS, G_FIELDS, H, ALL_SUBS
 from qf_utils.field_utils import FieldUtils
 from utils.file._csv import dict_2_csv
 from utils.graph.local_graph_utils import GUtils
+from utils.serialize_complex import is_complex
+
 
 class QFUtils(FieldUtils):
 
@@ -144,23 +147,35 @@ class QFUtils(FieldUtils):
 
     def build_parameter(self):
         print("build_parameter...")
-        for pid, pval in self.parameters.items():
-            self.g.add_node(
-                dict(
-                    nid=pid,
-                    type="PARAM",
-                    value=pval
-                )
-            )
 
-        for key, value in ENV.items():
+        for key, value in self.create_env().items():
+            _complex = is_complex(value)
             self.g.add_node(
                 dict(
                     nid=key,
                     type="PARAM",
-                    value=value
+                    value=value,
+                    const=True,
+                    axis_def=None,
+                    param_type="complex" if _complex is True else type(value)
                 )
             )
+
+        # add return key as param jsut use within sm managrer workflow
+        for key, value in self.g.G.nodes(data=True):
+            if value.get("type") == "METHOD":
+                self.g.add_node(
+                    dict(
+                        nid=key,
+                        type="PARAM",
+                        value=[],
+                        const=False,
+                        axis_def=None,
+                        param_type="Any" #todo
+                    )
+                )
+
+
         print("build_parameter... done")
 
 
@@ -198,7 +213,6 @@ class QFUtils(FieldUtils):
             )
 
             interactant_fields = [f.upper() for f in self.set_interactions_fild(ntype)]
-            #print(f"interactant_fields for field {ntype}", interactant_fields)
 
             self.g.add_node(
                 dict(
@@ -242,19 +256,16 @@ class QFUtils(FieldUtils):
         return all_interactants
 
 
-    def set_axis(self, data_keys:list[str]):
+    def set_axis(self, data_keys:list[Any]):
         """
         Determines the vmap axis for each parameter in the admin_data bundle.
         - Use axis 0 for array-like admin_data (map over it).
         - Use None for scalar admin_data (broadcast it).
         """
-        return tuple(
-            0
-            if not p in self.env
-            else None
+        return (
+            0 if not p in self.env else None
             for p in data_keys
         )
-
 
     # Helper to add edges safely and set metadata
     def add_edges_from_map(self, ntype, src_type, interactants, field_index):
