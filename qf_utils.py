@@ -3,16 +3,17 @@ from typing import Any
 
 import numpy as np
 
-from data import FERM_PARAMS, GAUGE_FIELDS, ENV
+from firegraph.qfu.data import FERM_PARAMS, GAUGE_FIELDS
+from firegraph.qfu.fermion.ferm_creator import FermCreator
+from firegraph.qfu.gauge.g_creator import GaugeCreator
+from firegraph.qfu.higgs.higgs_creator import HiggsCreator
+from firegraph.qfu.all_subs import FERMIONS, G_FIELDS, H, ALL_SUBS
+from firegraph.qfu.field_utils import FieldUtils
 
-from core.sm.fermion.ferm_creator import FermCreator
-from core.sm.gauge.g_creator import GaugeCreator
-from core.sm.higgs.higgs_creator import HiggsCreator
-from qf_utils.all_subs import FERMIONS, G_FIELDS, H, ALL_SUBS
-from qf_utils.field_utils import FieldUtils
-from utils.file._csv import dict_2_csv
-from utils.graph.local_graph_utils import GUtils
-from utils.serialize_complex import is_complex
+from firegraph.file._csv import dict_2_csv
+from firegraph.gutils import GUtils
+from firegraph.utils.serialize_complex import is_complex
+from firegraph.utils.get_shape import get_shape
 
 
 class QFUtils(FieldUtils):
@@ -113,7 +114,7 @@ class QFUtils(FieldUtils):
 
 
     def all_px_neighbors(self, attrs):
-        nid_part = attrs["nid"].split("_px_")[-1].split("_")[0]
+        nid_part = attrs["id"].split("_px_")[-1].split("_")[0]
 
         neighbors = [
             pxid
@@ -152,7 +153,7 @@ class QFUtils(FieldUtils):
             _complex = is_complex(value)
             self.g.add_node(
                 dict(
-                    nid=key,
+                    id=key,
                     type="PARAM",
                     value=value,
                     const=True,
@@ -166,7 +167,7 @@ class QFUtils(FieldUtils):
             if value.get("type") == "METHOD":
                 self.g.add_node(
                     dict(
-                        nid=key,
+                        id=key,
                         type="PARAM",
                         value=[],
                         const=False,
@@ -174,11 +175,7 @@ class QFUtils(FieldUtils):
                         param_type="Any" #todo
                     )
                 )
-
-
         print("build_parameter... done")
-
-
 
 
     def build_interacion_G(self):
@@ -192,7 +189,7 @@ class QFUtils(FieldUtils):
             if not self.g.G.has_node(src_layer):
                 self.g.add_node(
                     dict(
-                        nid=src_layer.upper(),
+                        id=src_layer.upper(),
                         type="MODULE",
                         module_index=i
                     )
@@ -201,6 +198,8 @@ class QFUtils(FieldUtils):
         # CREATE FIELDS
         for ntype in ALL_SUBS:
             ntype=ntype.upper()
+            module_id = self.get_parent(ntype)
+            field_index = self.modules_fields[module_id].index(ntype.lower())
             # create batch attrs
             field_value = self.batch_field_single(
                 ntype,
@@ -208,21 +207,21 @@ class QFUtils(FieldUtils):
             )
 
             # set axis def
-            axis_def = self.set_axis(
-                list(field_value.values())
-            )
+            axis_def = list(self.set_axis(list(field_value.keys())))
 
             interactant_fields = [f.upper() for f in self.set_interactions_fild(ntype)]
 
             self.g.add_node(
                 dict(
-                    nid=ntype,
+                    id=ntype,
                     type="FIELD",
+                    field_index=field_index,
                     parent=[
-                        self.parent_ntype(ntype),
+                        module_id,
                     ],
                     values=list(field_value.values()),
                     keys=list(field_value.keys()),
+                    shape=[get_shape(value) for value in field_value.values()],
                     axis_def=axis_def,
                     interactant_fields=interactant_fields,
                     module_id=self.get_parent(ntype),
@@ -238,7 +237,6 @@ class QFUtils(FieldUtils):
                         ntype=ntype,
                         src_type=src_layer,
                         interactants=interactants,
-                        field_index=i,
                     )
         print("build_interacion_G... done")
 
@@ -268,13 +266,13 @@ class QFUtils(FieldUtils):
         )
 
     # Helper to add edges safely and set metadata
-    def add_edges_from_map(self, ntype, src_type, interactants, field_index):
+    def add_edges_from_map(self, ntype, src_type, interactants):
         # mapping can be dict-of-lists or dict-of-dicts
         for neighbor in interactants:
             # field -> field
             self.g.add_edge(
                 src=ntype.upper(),
-                trt=neighbor.upper(),
+                trgt=neighbor.upper(),
                 attrs=dict(
                     rel="has_interactant",
                     src_layer="FIELD",
@@ -282,16 +280,18 @@ class QFUtils(FieldUtils):
                 )
             )
 
-        # module -> field
-        self.g.add_edge(
-            src=src_type.upper(),
-            trt=ntype,
-            attrs=dict(
-                rel="has_field",
-                src_layer="MODULE",
-                trgt_layer="FIELD",
+        # A module owns only its declared fields; other fields are linked as interactants.
+        module_fields = self.modules_fields.get(src_type.upper(), [])
+        if ntype.lower() in module_fields:
+            self.g.add_edge(
+                src=src_type.upper(),
+                trgt=ntype,
+                attrs=dict(
+                    rel="has_field",
+                    src_layer="MODULE",
+                    trgt_layer="FIELD",
+                )
             )
-        )
 
 
     def get_npm_values(
@@ -334,7 +334,7 @@ class QFUtils(FieldUtils):
     def get_pm_val(self, ntype, pxid, field_key):
         for nnid in self.get_neighbor_ids(ntype, pxid):
             # print("nnid", nnid)
-            node_data = self.g.get_node(nid=nnid)
+            node_data = self.g.get_node(id=nnid)
             # print("node_data", node_data)
 
             if node_data:
@@ -457,14 +457,14 @@ class QFUtils(FieldUtils):
         nids = {}
         if "quark" in ntype.lower():
             for i in range(3):
-                nid = f"{ntype}__{px_id}__{i}"
+                id = f"{ntype}__{px_id}__{i}"
                 nids[nid] = []
         elif "gluon" in ntype.lower():
             for i in range(8):
-                nid = f"{ntype}__{px_id}__{i}"
+                id = f"{ntype}__{px_id}__{i}"
                 nids[nid] = []
         else:
-            nid = f"{ntype}__{px_id}"
+            id = f"{ntype}__{px_id}"
             nids[nid] = []
         return nids
 
@@ -483,7 +483,7 @@ class QFUtils(FieldUtils):
         )
 
         for fattrs in field_attrs:
-            nnid = fattrs["nid"]
+            nnid = fattrs["id"]
             if self.g.G.has_node(nnid):
                 print("Apply stim to", nnid)
                 # check for item attrs
@@ -509,7 +509,7 @@ class QFUtils(FieldUtils):
         print(f"desrialisation of {len(values)} values finsiehd")
 
 
-    def get_attrs_from_ntype(self, ntype, px_id, pos=None, light=False, nid=None) -> list:
+    def get_attrs_from_ntype(self, ntype, px_id, pos=None, light=False, id=None) -> list:
         attrs=[]
         try:
             if ntype.lower() in FERMIONS:
@@ -517,14 +517,14 @@ class QFUtils(FieldUtils):
                     ntype,
                     px_id=px_id,
                     light=light,
-                    nid=nid,
+                    id=nid,
                     pos=pos,
                 )
 
             elif ntype.lower() in H:
                 attrs = self.higgs_creator.higgs_attrs(
                     px_id=px_id,
-                    nid=nid,
+                    id=nid,
                 )
 
             elif ntype.lower() in G_FIELDS:
@@ -638,7 +638,7 @@ class QFUtils(FieldUtils):
             for k, v in zip(keys, values):
                 self.g.add_node(
                     dict(
-                        nid=k,
+                        id=k,
                         type="PARAM",
                         value=v,
                         parent=[parent]
@@ -648,7 +648,7 @@ class QFUtils(FieldUtils):
                 # PARAM -> FIELD
                 self.g.add_edge(
                     src=field_id,
-                    trt=k,
+                    trgt=k,
                     attrs=dict(
                         rel='has_param',
                         trgt_layer='PARAM',
@@ -916,6 +916,3 @@ class QFUtils(FieldUtils):
             return self._field_value(type=ntype)
         elif ntype.lower() == "phi":
             return "h"
-
-
-

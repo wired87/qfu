@@ -12,8 +12,8 @@ from typing import List, Callable
 import ray
 from ray import get_actor
 
-from qf_utils.all_subs import ALL_SUBS, FERMIONS
-from qf_utils.qf_utils import QFUtils
+from firegraph.qfu.qf_utils.all_subs import ALL_SUBS, FERMIONS
+from firegraph.qfu.qf_utils.qf_utils import QFUtils
 
 
 class RuntimeUtilsCreator(
@@ -29,13 +29,13 @@ class RuntimeUtilsCreator(
         #self.g.print_status_G("RuntimeUtilsCreator")
 
     def all_subs(self, attrs):
-        nid=attrs["nid"]
+        id=attrs["id"]
         type=attrs["type"]
         pixel_id=attrs["px"]
 
         print("set all_subs")
         all_subs = self.get_all_node_sub_fields(
-            nid=nid,
+            id=nid,
             as_dict=True,
             edges=True,
         )
@@ -77,7 +77,7 @@ class RuntimeUtilsCreator(
             print("gneighbors extracte:", len(g_neighbors))
 
             for nnid in g_neighbors:
-                nattrs = self.g.get_node(nid=nnid)
+                nattrs = self.g.get_node(id=nnid)
 
                 filtered[0].append(
                     nattrs["field_value"])
@@ -105,7 +105,7 @@ class RuntimeUtilsCreator(
             )
 
             for n in neighbors:
-                nattrs = self.g.get_node(nid=n)
+                nattrs = self.g.get_node(id=n)
 
                 filtered[0].append(nattrs["psi"])
                 filtered[1].append(nattrs["psi_bar"])
@@ -131,7 +131,7 @@ class RuntimeUtilsCreator(
             )
 
             for nnid in g_neighbors:
-                args = self.g.get_node(nid=nnid)
+                args = self.g.get_node(id=nnid)
                 nntype = args["type"]
                 filtered[0].append(
                     args["field_value"]
@@ -152,21 +152,21 @@ class RuntimeUtilsCreator(
 
     # todo coding sys based on components - not single code lines
     def h_neighbor(self, attrs):
-        nid=attrs["nid"]
-        return self.g.get_node(nid=f"PHI__px{nid.split('_px')[-1]}")
+        id=attrs["id"]
+        return self.g.get_node(id=f"PHI__px{nid.split('_px')[-1]}")
 
     def f_neighbors(self, attrs):
-        nid=attrs["nid"]
+        id=attrs["id"]
         return self.g.get_neighbor_list(node=nid, target_type=[g.lower() for g in FERMIONS])
 
     def neighbors(self, attrs):
-        nid=attrs["nid"]
+        id=attrs["id"]
 
         neighbor_types = [*ALL_SUBS, "ENV", "PIXEL"]
         neighbors: tuple = self.g.get_neighbor_list(node=nid, target_type=neighbor_types)
         return {n: a for n, a in neighbors}
 
-    def attrs(self, attrs, nid=None):
+    def attrs(self, attrs, id=None):
         return {
             "id": nid or attrs.get("id"),
             **{k: v for k, v in attrs.items() if k != "id"}
@@ -313,11 +313,11 @@ class RuntimeUtilsCreator(
                         # If method exists but fails, will try constant lookup
                         pass
             
-            # If still any None, try constants from UTILS_WORKER
+            # If still any None, try constants from firegraph.utils_WORKER
             if any(v is None for v in vals):
                 try:
                     uw = ray.get_actor(name="UTILS_WORKER")
-                    node = ray.get(uw.get_node.remote(nid=key))
+                    node = ray.get(uw.get_node.remote(id=key))
                     print(f"collect const {key}")
                     print("const n found", node)
                     if node and "value" in node:
@@ -331,7 +331,7 @@ class RuntimeUtilsCreator(
                         # Constant node exists but no value - this is an error condition
                         raise ValueError(f"Constant {key} found in UTILS_WORKER but has no 'value' field")
                 except Exception as e:
-                    print(f"Error getting constant {key} from UTILS_WORKER: {e}")
+                    print(f"Error getting constant {key} from firegraph.utils_WORKER: {e}")
                     # Re-raise if it was a ValueError about missing value
                     if isinstance(e, ValueError):
                         raise

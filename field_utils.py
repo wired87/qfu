@@ -1,9 +1,9 @@
 import os
 
 import numpy as np
-from data import ENV
-from qf_utils.all_subs import GLON_MAP, FERMIONS, G_FIELDS, H, QUARKS
-from utils.serialize_complex import serialize_complex_dict
+
+from firegraph.qfu.data import ENV
+from firegraph.qfu.all_subs import GLON_MAP, FERMIONS, G_FIELDS, H, QUARKS
 
 
 class FieldUtils:
@@ -143,6 +143,7 @@ class FieldUtils:
         self.parameters = {
             "o_operators": self.o_operators,
             "gamma": self.gamma,
+            "gamma_0": self.gamma_0,
             "T": self.T,
             "gamma0_inv": self.gamma0_inv,
             "minkovski_tensor": self.mt,
@@ -235,7 +236,7 @@ class FieldUtils:
         self.all_sub_fields = [
             *[k.upper() for k in self.gauge_fields],
             *[k.upper() for k in self.fermion_fields],
-            "PHI"
+            "higgs_field"
         ]
 
         # 4 array
@@ -351,6 +352,8 @@ class FieldUtils:
         try:
             return self.interactants[ntype.lower()]
         except Exception as e:
+            print(f"Err core.qfu.field_utils::FieldUtils.get_interactive_neighbors | handler_line=353 | {type(e).__name__}: {e}")
+            print(f"[exception] core.qfu.field_utils.FieldUtils.get_interactive_neighbors: {e}")
             print(f"Err get_interactive_neighbors: {e}")
         return []
 
@@ -504,6 +507,8 @@ class FieldUtils:
             a = lookup[ntype.lower()](None)
             return a
         except Exception as e:
+            print(f"Err core.qfu.field_utils::FieldUtils._get_gauge_generator | handler_line=507 | {type(e).__name__}: {e}")
+            print(f"[exception] core.qfu.field_utils.FieldUtils._get_gauge_generator: {e}")
             print("Err _get_gauge_generator", e)
 
 
@@ -607,7 +612,7 @@ class FieldUtils:
             "w_plus": "W⁺",  # W+
             "w_minus": "W⁻",  # W-
             "z_boson": "Z⁰",  # Z
-            "phi": "H",  # Higgs
+            "higgs_field": "H",  # Higgs
             "b_field": "B",  # Hypercharge
             "w_field": "W",  # Weak isospin
         }
@@ -629,9 +634,8 @@ class FieldUtils:
     def set_interaction(self):
         ggc = {k: [*QUARKS, *[g for g in GLON_MAP if g != k]] for k in GLON_MAP}
 
-        # qmap: each quark color has photon, w+, w-, z and all gluons
         qmap = {
-            q: ["photon", "w_plus", "w_minus", "z_boson", *GLON_MAP]
+            q: ["photon", "w_plus", "w_minus", "z_boson", *GLON_MAP] #*GLON_MAP -> already defined in ggc
             for q in QUARKS
         }
 
@@ -667,19 +671,19 @@ class FieldUtils:
 
         self.couplings = {
             "FERMION": {
-                "HIGGS": {ferm: ["phi"] for ferm in FERMIONS},
+                "HIGGS": {ferm: ["higgs_field"] for ferm in FERMIONS},
                 "GAUGE": fermion_g_couplings,
             },
             "GAUGE": {
-                "HIGGS": {g: ["phi"] for g in ["w_plus", "w_minus", "z_boson"]},
+                "HIGGS": {g: ["higgs_field"] for g in ["w_plus", "w_minus", "z_boson"]},
                 "FERMION": fermion_g_couplings,
                 "GAUGE": gauge_couplings,
             },
             "HIGGS": {
-                "FERMION": {"phi": [
+                "FERMION": {"higgs_field": [
                     *QUARKS,
                     "electron", "muon", "tau", "tau_neutrino", "muon_neutrino", "electron_neutrino",
                 ]},
-                "GAUGE": {"phi": ["w_plus", "w_minus", "z_boson"]},
-            }
+                "GAUGE": {"higgs_field": ["w_plus", "w_minus", "z_boson"]},
+            },
         }
